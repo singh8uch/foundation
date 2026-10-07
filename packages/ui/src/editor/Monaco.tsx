@@ -38,7 +38,9 @@ export default function MonacoEditor({
   ...options
 }: IEditorProps) {
   const isDark = useCssIsDark()
-  const readOnly = disabled || options.readOnly
+  // Always a boolean: Monaco keeps the last readOnly it was given, so leaving it unset once
+  // `disabled` turns false would keep an editor that opened disabled locked.
+  const readOnly = Boolean(disabled || options.readOnly)
   const monacoRef = useRef<ReturnType<typeof monaco.editor.create>>(null)
   const isSyncingValueRef = useRef(false)
 
@@ -49,7 +51,7 @@ export default function MonacoEditor({
     }
     defineEditorThemes(monaco.editor)
     monaco.editor.setTheme(getThemeName(isDark, disabled))
-    monacoRef.current.updateOptions(readOnly === undefined ? {} : { readOnly })
+    monacoRef.current.updateOptions({ readOnly })
   }, [disabled, isDark, readOnly])
 
   // Reconcile before paint so an older passive effect cannot overwrite a new edit.
@@ -104,7 +106,7 @@ export default function MonacoEditor({
             automaticLayout: true,
             model,
             ...options,
-            ...(readOnly === undefined ? {} : { readOnly }),
+            readOnly,
             fixedOverflowWidgets: true,
             suggest: {
               preview: true,
