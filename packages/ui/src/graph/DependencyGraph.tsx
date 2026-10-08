@@ -21,6 +21,7 @@ import { Collapse } from './Collapse'
 import { type JobHandlers, Joblist } from './JobSummary'
 import { MatrixGroupNode, MatrixGroupSummaryItem } from './MatrixGroup'
 import { Reveal } from './Reveal'
+import { StepSummary } from './StepSummary'
 import TreeView from './TreeView'
 import { isJobRecord, type RunLink, type WorkflowJob, type WorkflowStep } from './types'
 import { jobLabel, toggled } from './util'
@@ -1226,12 +1227,14 @@ export default function DependencyGraph({
   removeBorder,
   viewMode = 'dag',
   setViewMode,
+  openStep,
 }: {
   run: GraphRun
   preview?: boolean
   removeBorder?: boolean | undefined
   viewMode?: ViewMode
   setViewMode?: (mode: ViewMode) => void
+  openStep?: { job: string; step: number } | undefined
 }) {
   const engine = useWorkflowEngine()
   // Animation timing constant (seconds) — controls line draw, dot transitions, and stagger delay
@@ -1421,6 +1424,14 @@ export default function DependencyGraph({
     }
   }, [sublogOpen, sublogs, sublogsError, sublogsLoading])
 
+  const openJob = openStep?.job
+  const openStepIndex = openStep?.step
+  useEffect(() => {
+    if (openJob !== undefined && openStepIndex !== undefined) {
+      setSublogOpen(engine.stepLogPath('', openJob, openStepIndex))
+    }
+  }, [engine, openJob, openStepIndex])
+
   const [sublogJob = '', sublogStepDir] = sublogOpen.split('/').slice(-3, -1)
   const sublogStep = sublogStepDir === undefined ? undefined : (sublogStepDir.split('_')[1] ?? '')
   // Paging needs a path naming a job and step. A subworkflow's general log is its
@@ -1434,6 +1445,10 @@ export default function DependencyGraph({
   // The step's log and its script sit side by side; the toggle swaps one for the other.
   const sublogFileStart = sublogOpen.lastIndexOf('/') + 1
   const sublogShowsLog = sublogOpen.slice(sublogFileStart) === 'logs.out'
+  const sublogSummaryPath =
+    !preview && sublogShowsLog && sublogStepData?.summary
+      ? `${sublogOpen.slice(0, sublogFileStart)}summary.md`
+      : null
 
   const matrixGroups = useMemo(() => engine.matrixGroups(jobs), [engine, jobs])
   const { dependencyCols } = useMemo(
@@ -1711,6 +1726,20 @@ export default function DependencyGraph({
       </button>
     ) : undefined
 
+  // The summary takes its height from the log, so the log's bar stays on screen.
+  const stepSummaryMaxHeight = Math.round(windowSize.h * 0.3)
+  const stepLogViewer = (
+    <LogViewer
+      log={currentSublog.slice(-100000)}
+      height={windowSize.h / 1.2 - (sublogSummaryPath ? stepSummaryMaxHeight + 8 : 0)}
+      width={windowSize.w / 1.2}
+      hideExpand={true}
+      additionalBottomLeftBarComponents={additionalBottomLeftBarComponents}
+      additionalBottomRightBarComponents={additionalBottomRightBarComponents}
+      enableWorkflowCommands
+    />
+  )
+
   return (
     <div className="flex flex-col lg:flex-row w-full">
       {!preview && (
@@ -1961,16 +1990,17 @@ export default function DependencyGraph({
                 {additionalBottomRightBarComponents}
               </div>
             </div>
+          ) : sublogSummaryPath ? (
+            <div className="flex flex-col gap-y-2">
+              <StepSummary
+                runSlug={runSlug}
+                path={sublogSummaryPath}
+                maxHeight={stepSummaryMaxHeight}
+              />
+              {stepLogViewer}
+            </div>
           ) : (
-            <LogViewer
-              log={currentSublog.slice(-100000)}
-              height={windowSize.h / 1.2}
-              width={windowSize.w / 1.2}
-              hideExpand={true}
-              additionalBottomLeftBarComponents={additionalBottomLeftBarComponents}
-              additionalBottomRightBarComponents={additionalBottomRightBarComponents}
-              enableWorkflowCommands
-            />
+            stepLogViewer
           )}
         </div>
       </BareModal>

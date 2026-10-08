@@ -5,6 +5,8 @@ export interface MarkdownProps {
   children: string
   isStreaming?: boolean
   controls?: ControlsConfig
+  mermaid?: boolean
+  httpsImagesOnly?: boolean
 }
 
 // Streamdown pulls in the whole shiki + katex stack (~230KB compressed), so it

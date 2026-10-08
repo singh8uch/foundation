@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest'
 import { cleanup, createEvent, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 
 // jsdom lacks these; the graph relies on them for connector recompute + fit.
 global.ResizeObserver = class {
@@ -298,6 +298,60 @@ describe('DependencyGraph step log states', () => {
     withRunFile({ data: 'banana' })
     openGeneralLog()
     expect(screen.getByTestId('log')).toHaveTextContent('banana')
+  })
+})
+
+describe('DependencyGraph step summary', () => {
+  // The summary's markdown renderer loads lazily; loading it up front keeps a busy run in time.
+  beforeAll(() => import('../components/MarkdownImpl'), 60_000)
+
+  const summaryRun = {
+    ...run,
+    executedJobs: {
+      report: {
+        status: 'completed',
+        steps: [
+          { name: 'test', status: 'completed', summary: { bytes: 9 } },
+          { name: 'lint', status: 'completed' },
+        ],
+      },
+    },
+  }
+
+  const renderOpen = (step: number) => {
+    const calls: [string | null, { refreshInterval?: number } | undefined][] = []
+    render(
+      <UIProvider
+        data={{
+          useRunFile: (_slug, path, options) => {
+            calls.push([path, options])
+            return {
+              data: path?.endsWith('/summary.md') ? '## Tests\n' : 'step log',
+              isLoading: false,
+              error: undefined,
+            }
+          },
+        }}
+      >
+        <DependencyGraph run={summaryRun} openStep={{ job: 'report', step }} />
+      </UIProvider>,
+    )
+    return calls
+  }
+
+  it('opens the step and shows its summary above its log, without polling', async () => {
+    const calls = renderOpen(0)
+    const heading = await screen.findByRole('heading', { name: 'Tests' })
+    const log = screen.getByTestId('log')
+    expect(log).toHaveTextContent('step log')
+    expect(heading.compareDocumentPosition(log) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(calls).toContainEqual(['logs/report/step_0/summary.md', undefined])
+  })
+
+  it('fetches no summary for a step without one', () => {
+    const calls = renderOpen(1)
+    expect(screen.getByTestId('log')).toHaveTextContent('step log')
+    expect(calls.some(([path]) => path?.endsWith('summary.md'))).toBe(false)
   })
 })
 

@@ -1,16 +1,23 @@
-import { code } from '@streamdown/code'
-import { math } from '@streamdown/math'
 import cx from 'classnames'
-import { type BundledTheme, type PluginConfig, Streamdown } from 'streamdown'
+import { type BundledTheme, defaultRehypePlugins, Streamdown } from 'streamdown'
+import { rehypeHttpsImagesOnly } from './httpsImages'
 import type { MarkdownProps } from './Markdown'
+import { useMarkdownPlugins } from './markdownPlugins'
 
-const plugins: PluginConfig = {
-  code,
-  math: math as NonNullable<PluginConfig['math']>,
-}
 const shikiTheme: [BundledTheme, BundledTheme] = ['github-light', 'github-dark']
 
-export default function Markdown({ children, isStreaming, controls }: MarkdownProps) {
+const httpsImagesRehypePlugins = Object.entries(defaultRehypePlugins).flatMap(([name, plugin]) =>
+  name === 'harden' ? [rehypeHttpsImagesOnly, plugin] : [plugin],
+)
+
+export default function Markdown({
+  children,
+  isStreaming,
+  controls,
+  mermaid,
+  httpsImagesOnly,
+}: MarkdownProps) {
+  const plugins = useMarkdownPlugins(children, !!mermaid)
   return (
     <div className="markdown whitespace-normal text-start w-full">
       <Streamdown
@@ -18,6 +25,7 @@ export default function Markdown({ children, isStreaming, controls }: MarkdownPr
         isAnimating={isStreaming ?? false}
         {...(isStreaming ? { caret: 'block' as const } : {})}
         {...(controls ? { controls } : {})}
+        {...(httpsImagesOnly ? { rehypePlugins: httpsImagesRehypePlugins } : {})}
         plugins={plugins}
         shikiTheme={shikiTheme}
         components={{
